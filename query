@@ -1,0 +1,340 @@
+#!/usr/bin/env python
+
+import pandas as pd
+import warnings
+import statistics
+
+pd.options.mode.chained_assignment = None 
+warnings.simplefilter(action='ignore', category=FutureWarning)
+pd.set_option('display.max_rows', None)
+
+df = pd.read_csv("american_gut_metadata_stool_samples.tsv", sep="\t", error_bad_lines=False, low_memory=False, header = 0, index_col = 0)
+
+attribute_dict = {}
+
+for col in df.columns: #creates number range for numerical columns
+    num_lst = []
+    for pot_num in df[col].unique():
+        try:
+            num_lst.append(float(pot_num))
+        except:
+            continue
+            
+    if num_lst == []:
+        attribute_dict[col] = df[col].unique()
+    else:
+        attribute_dict[col] = [min(num_lst), max(num_lst)]
+        
+attributes = list(attribute_dict.keys())
+
+matrix = [attributes[i:i+2] for i in range(0, len(attributes), 2)]
+s = [[str(e) for e in row] for row in matrix]
+lens = [max(map(len, col)) for col in zip(*s)]
+fmt = '\t'.join('{{:{}}}'.format(x) for x in lens)
+table = [fmt.format(*row) for row in s]
+print('\n'.join(table))
+print("")
+
+ans = str(input("Would you like to see what inputs a specific attribute can take? Y or N: "))
+
+while (ans != "Y") and (ans != "N"):
+    ans = str(input("Incorrect input. Y or N: "))
+
+def try_again():
+    try: 
+        attrib = str(input("Sorry, incorrect attribute name. Please try again. Enter attribute: "))
+        print(attribute_dict[attrib], "\n")
+    except:
+        return(try_again())
+    
+while ans == "Y":
+    attrib = str(input("Enter attribute: "))
+    try:
+        print(attribute_dict[attrib], "\n")
+    except:
+        try_again()
+    ans = str(input("Would you like to see what inputs another specific attribute can take? Y or N: "))
+    while (ans != "Y") and (ans != "N"):
+        ans = str(input("Incorrect input. Y or N: "))
+
+print("")
+print("Please enter a statement such as \"mental_illness_type_depression == true; age_years <= 50\"")
+print("Make sure statement has EXACT attribute and input names")
+
+def attribute_selector_test():
+    global test
+    
+    data = list(map(str, input("Make sure statements are seperated by \";\": ").split(";")))
+    
+    class_list = dict()
+    
+    for entry in data: #deals with input statements
+        if '==' in entry:
+            temp = entry.split('==')
+            if (isinstance(temp[1], int) == True) or (isinstance(temp[1], float) == True):
+                class_list[temp[0].rstrip().lstrip()] = ["==", float(temp[1])]
+            else:
+                class_list[temp[0].rstrip().lstrip()] = ["==", temp[1].rstrip().lstrip()]
+        elif '!=' in entry:
+            temp = entry.split('!=')
+            if (isinstance(temp[1], int) == True) or (isinstance(temp[1], float) == True):
+                class_list[temp[0].rstrip().lstrip()] = ["!=", float(temp[1])]
+            else:
+                class_list[temp[0].rstrip().lstrip()] = ["!=", temp[1].rstrip().lstrip()]
+        elif '<=' in entry:
+            temp = entry.split('<=')
+            class_list[temp[0].rstrip().lstrip()] = ["<=", float(temp[1])]
+        elif '>=' in entry:
+            temp = entry.split('>=')
+            class_list[temp[0].rstrip().lstrip()] = [">=", float(temp[1])]
+        elif '<' in entry:
+            temp = entry.split('<')
+            class_list[temp[0].rstrip().lstrip()] = ["<", float(temp[1])]
+        elif '>' in entry:
+            temp = entry.split('>')
+            class_list[temp[0].rstrip().lstrip()] = [">", float(temp[1])]
+        else:
+            print("Error in entry: Make sure operators are correct")
+            return(attribute_selector_test())
+    
+    test = None
+    test = df
+
+    for k, v in class_list.items(): #makes sure only numerical data is present in selected numerical columns
+        if (isinstance(v[1], int) == True) or (isinstance(v[1], float) == True):
+            try:
+                for pot_num in test[k].unique():
+                    try:
+                        float(pot_num)
+                    except:
+                        test = test[test[k] != pot_num]
+                test[k] = pd.to_numeric(test[k], downcast="float")
+            except:
+                print("Problem with either attribute or input name. Please enter again")
+                return(attribute_selector_test())
+            
+    query = []
+
+    query.append(' and '.join([f'{k} == {repr(v[1])}' for k, v in class_list.items() if v[0] == "=="]))
+    query.append(' and '.join([f'{k} <= {repr(v[1])}' for k, v in class_list.items() if v[0] == "<="]))
+    query.append(' and '.join([f'{k} >= {repr(v[1])}' for k, v in class_list.items() if v[0] == ">="]))
+    query.append(' and '.join([f'{k} > {repr(v[1])}' for k, v in class_list.items() if v[0] == ">"]))
+    query.append(' and '.join([f'{k} < {repr(v[1])}' for k, v in class_list.items() if v[0] == "<"]))
+    
+    for q in query:
+        if q != "":
+            try:
+                test = test.query(q)
+            except:
+                print("Problem with either attribute or input name. Please enter again")
+                return(attribute_selector_test())
+                
+    test = test[["age_years", "sex", "bmi"]]
+    test = test[test["age_years"] != "Not provided"]
+    test = test[test["bmi"] != "Not provided"]
+    test = test[(test["sex"] != "unspecified") & (test["sex"] != "true") & (test["sex"] != "false") & (test["sex"] != "other") & (test["sex"] != "Not provided")]
+    test = test.drop_duplicates()
+    test.index.name = 'accession'
+    test = test.reset_index()
+
+    print("")
+    print(test)
+
+def attribute_selector_control():
+    global control
+    
+    print("")
+    print("Select for a control group:")
+    print("Please enter a statement such as \"mental_illness_type_depression == false; age_years >= 50\"")
+    print("Make sure statement has EXACT attribute and input names")
+    data = list(map(str, input("Make sure statements are seperated by \";\": ").split(";")))
+    
+    class_list = dict()
+    
+    for entry in data: #deals with input statements
+        if '==' in entry:
+            temp = entry.split('==')
+            if (isinstance(temp[1], int) == True) or (isinstance(temp[1], float) == True):
+                class_list[temp[0].rstrip().lstrip()] = ["==", float(temp[1])]
+            else:
+                class_list[temp[0].rstrip().lstrip()] = ["==", temp[1].rstrip().lstrip()]
+        elif '!=' in entry:
+            temp = entry.split('!=')
+            if (isinstance(temp[1], int) == True) or (isinstance(temp[1], float) == True):
+                class_list[temp[0].rstrip().lstrip()] = ["!=", float(temp[1])]
+            else:
+                class_list[temp[0].rstrip().lstrip()] = ["!=", temp[1].rstrip().lstrip()]
+        elif '<=' in entry:
+            temp = entry.split('<=')
+            class_list[temp[0].rstrip().lstrip()] = ["<=", float(temp[1])]
+        elif '>=' in entry:
+            temp = entry.split('>=')
+            class_list[temp[0].rstrip().lstrip()] = [">=", float(temp[1])]
+        elif '<' in entry:
+            temp = entry.split('<')
+            class_list[temp[0].rstrip().lstrip()] = ["<", float(temp[1])]
+        elif '>' in entry:
+            temp = entry.split('>')
+            class_list[temp[0].rstrip().lstrip()] = [">", float(temp[1])]
+        else:
+            print("Error in entry: Make sure operators are correct")
+            return(attribute_selector_control())
+    
+    control = None
+    control = df
+
+    for k, v in class_list.items(): #makes sure only numerical data is present in selected numerical columns
+        if (isinstance(v[1], int) == True) or (isinstance(v[1], float) == True):
+            try:
+                for pot_num in control[k].unique():
+                    try:
+                        float(pot_num)
+                    except:
+                        control = control[control[k] != pot_num]
+                control[k] = pd.to_numeric(control[k], downcast="float")
+            except:
+                print("Problem with either attribute or input name. Please enter again")
+                return(attribute_selector_control())
+            
+    query = []
+
+    query.append(' and '.join([f'{k} == {repr(v[1])}' for k, v in class_list.items() if v[0] == "=="]))
+    query.append(' and '.join([f'{k} <= {repr(v[1])}' for k, v in class_list.items() if v[0] == "<="]))
+    query.append(' and '.join([f'{k} >= {repr(v[1])}' for k, v in class_list.items() if v[0] == ">="]))
+    query.append(' and '.join([f'{k} > {repr(v[1])}' for k, v in class_list.items() if v[0] == ">"]))
+    query.append(' and '.join([f'{k} < {repr(v[1])}' for k, v in class_list.items() if v[0] == "<"]))
+    
+    for q in query:
+        if q != "":
+            try:
+                control = control.query(q)
+            except:
+                print("Problem with either attribute or input name. Please enter again")
+                return(attribute_selector_control())
+                
+    control = control[["age_years", "sex", "bmi"]]
+    control = control[control["age_years"] != "Not provided"]
+    control = control[control["bmi"] != "Not provided"]
+    control = control[(control["sex"] != "unspecified") & (control["sex"] != "true") & (control["sex"] != "false") & (control["sex"] != "other") & (control["sex"] != "Not provided")]
+    control = control.drop_duplicates()
+    control.index.name = 'accession'
+    control = control.reset_index()
+    
+    #print("")
+    #print(control)
+    
+attribute_selector_test()
+
+cont = input("Would you like to select a control group? Y or N: ")
+
+while (cont != "Y") and (cont != "N"):
+    cont = str(input("Incorrect input. Y or N: "))
+
+if cont == "N":
+    save = input("Would you like to save a tsv file of individuals you selected? Y or N:")
+    print("")
+
+    while (save != "Y") and (save != "N"):
+        save = str(input("Incorrect input. Y or N: "))
+    
+    if save == "Y":
+        data = test
+        test_group_name = input("What would you like to name file? ")
+        print("")
+        data.to_csv(str(test_group_name) + '.tsv', sep="\t", index = False, header = True)
+        print(str(test_group_name) + ".tsv" + " saved")
+        print("")
+        print("Goodbye!")
+        
+    else:
+        print("")
+        print("Goodbye!")
+        
+elif cont == "Y":
+    attribute_selector_control()
+    
+    data = test
+    data = data.astype({"age_years": float, "bmi": float})
+    
+    data_search = control
+    data_search = data_search.astype({"age_years": float, "bmi": float})
+    
+    age_list = []
+    sex_list = []
+    bmi_list = []
+    accession_list = []
+
+    for ind, entry in data.iterrows():
+
+        gender = entry["sex"]
+        years_old = entry["age_years"]
+        body_mass_index = entry["bmi"]
+    
+        search = data_search[data_search["sex"] == gender]
+        search = search[search["age_years"] == years_old]
+    
+        if len(search) == 0:
+            i = 1
+            while len(search) == 0:
+                search = data_search[data_search["sex"] == gender]
+                search = search[(search["age_years"] <= years_old + i) & (search["age_years"] >= years_old - i)]
+                i += 1
+    
+        control = search.iloc[(search['bmi']-float(body_mass_index)).abs().argsort()[:1]]
+        identity = control["accession"].values[0]
+        
+        age_list.append(control["age_years"].values[0])
+        sex_list.append(control["sex"].values[0])
+        bmi_list.append(control["bmi"].values[0])
+        
+        accession_list.append(identity)
+    
+        idx = data_search.index[data_search["accession"] == identity][0]
+        data_search.drop(idx, inplace = True)
+    
+    accession_control_dic = {"accession": accession_list, "age_years": age_list, "sex": sex_list, "bmi": bmi_list}
+    accession_control_group = pd.DataFrame(accession_control_dic) 
+    print("")
+    print(accession_control_group)
+    
+    merged = pd.merge(accession_control_group, data, how='outer', left_index = False, right_index=False)
+    
+    print("")
+    print("Mean bmi of test group:", data["bmi"].mean(), "\n" + "Standard deviation:", data["bmi"].std(), "\n")
+    print("Mean bmi of control group:", statistics.mean(bmi_list), "\n" + "Standard deviation:", statistics.stdev(bmi_list))
+        
+    save_control = input("Would you like to save a tsv file of individuals you selected? Y or N:")
+    print("")
+    
+    while (save_control != "Y") and (save_control != "N"):
+        save_control = str(input("Incorrect input. Y or N: "))
+    
+    if save_control == "Y":
+        septog = input("Would you like to save test group and control group separately or together? S or T:")
+        print("")
+        
+        while (septog != "S") and (septog != "T"):
+            septog = str(input("Incorrect input. S or T: "))
+            
+        if septog == "S":
+            group_name_test = input("What would you like to name test group? ")
+            print("")
+            data.to_csv(str(group_name_test) + '.tsv', sep="\t", index = False, header = True)
+            print(str(group_name_test) + ".tsv" + " saved")
+            print("")
+            group_name_control = input("What would you like to name control group? ")
+            print("")
+            accession_control_group.to_csv(str(group_name_control) + '.tsv', sep="\t", index = False, header = True)
+            print(str(group_name_control) + ".tsv" + " saved")
+            print("")
+            print("Goodbye!")
+        else: 
+            group_name_test_control = input("What would you like to name the combined group? ")
+            merged.to_csv(str(group_name_test_control) + '.tsv', sep="\t", index = False, header = True)
+            print(str(group_name_test_control) + ".tsv" + " saved")
+            print("")
+            print("Goodbye!")
+        
+    else:
+        print("")
+        print("Goodbye!")
