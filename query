@@ -3,12 +3,19 @@
 import pandas as pd
 import warnings
 import statistics
+import sys
+import os
 
 pd.options.mode.chained_assignment = None 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 pd.set_option('display.max_rows', None)
 
-df = pd.read_csv("american_gut_metadata_stool_samples.tsv", sep="\t", error_bad_lines=False, low_memory=False, header = 0, index_col = 0)
+path = os.path.dirname(sys.argv[0])
+
+if path != "./query":
+    df = pd.read_csv(path + "/american_gut_metadata_stool_samples.tsv", sep="\t", error_bad_lines=False, low_memory=False, header = 0, index_col = 0)
+else:
+    df = pd.read_csv("american_gut_metadata_stool_samples.tsv", sep="\t", error_bad_lines=False, low_memory=False, header = 0, index_col = 0)
 
 attribute_dict = {}
 
