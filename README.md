@@ -2,7 +2,7 @@
 The Query Database contains the accession keys along with the corresponding information of 482 attributes for each of the 13,489 stool samples from American Gut Project.
 
 # SYSTEM REQUIREMENTS
-To run the QIIME Pipeline and its supporting python scripts requires:
+To run the Query-Database and its supporting python scripts requires:
 
 * A modern Linux operating system.
 * Python3 or greater.
