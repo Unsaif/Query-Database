@@ -123,6 +123,7 @@ def attribute_selector_test():
     query = []
 
     query.append(' and '.join([f'{k} == {repr(v[1])}' for k, v in class_list.items() if v[0] == "=="]))
+    query.append(' and '.join([f'{k} <= {repr(v[1])}' for k, v in class_list.items() if v[0] == "!="]))
     query.append(' and '.join([f'{k} <= {repr(v[1])}' for k, v in class_list.items() if v[0] == "<="]))
     query.append(' and '.join([f'{k} >= {repr(v[1])}' for k, v in class_list.items() if v[0] == ">="]))
     query.append(' and '.join([f'{k} > {repr(v[1])}' for k, v in class_list.items() if v[0] == ">"]))
